@@ -6,8 +6,12 @@ in success or collapse.
 """
 import threading
 import os
+import sys
 import json
 from typing import List, Dict, Any
+
+# Add parent directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import gradio as gr
 
@@ -20,14 +24,18 @@ _semaphore = threading.Semaphore(1)
 # Environment configuration – we use a reduced max_steps of 15 for the demo.
 _DEMO_MAX_STEPS = 15
 
-def _run_demo_episode(agent_name: str) -> Dict[str, Any]:
+def _run_demo_episode(agent_name: str) -> str:
     # Acquire semaphore; if unavailable return a busy message.
     if not _semaphore.acquire(blocking=False):
-        return {"error": "Demo is busy — another episode is running. Try again later."}
+        return "Demo is busy — another episode is running. Try again later."
     try:
         env = IncidentResponseEnv()
         env.max_steps = _DEMO_MAX_STEPS  # enforce 15‑step cap
-        agent = get_agent(agent_name)
+        try:
+            agent = get_agent(agent_name)
+        except Exception as e:
+            return f"Error creating agent: {str(e)}"
+        
         obs = env.reset()
         steps: List[Dict[str, Any]] = []
         done = False
@@ -40,18 +48,20 @@ def _run_demo_episode(agent_name: str) -> Dict[str, Any]:
             steps.append({"observation": obs, "action": action, "reward": reward})
             total_reward += reward
             obs = new_obs
+            
         # Determine termination reason.
         termination = "max_steps"
         if info.get("success_steps", 0) >= 2:
             termination = "success"
         elif info.get("collapse_steps", 0) >= 3:
             termination = "collapse"
+            
         result = {
             "steps": steps,
             "total_reward": total_reward,
             "termination": termination,
         }
-        return result
+        return _format_result(result)
     finally:
         _semaphore.release()
 
@@ -72,8 +82,6 @@ with gr.Blocks() as demo:
     run_button = gr.Button("Run Episode")
     output_box = gr.Textbox(label="Result", lines=30)
     run_button.click(fn=_run_demo_episode, inputs=[agent_dropdown], outputs=[output_box], api_name="run_episode")
-    # Post‑process to pretty‑print the JSON structures.
-    output_box.change(_format_result, inputs=[output_box], outputs=[output_box])
 
 if __name__ == "__main__":
     # Gradio dev server – the user can launch it with `python demo/app.py`

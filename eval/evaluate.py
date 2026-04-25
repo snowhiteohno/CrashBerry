@@ -5,10 +5,15 @@ does not depend on any external logging framework to keep the repository
 portable.
 """
 import argparse
+import sys
+import os
 from typing import Dict, Any, List
 
-from ..env.environment import IncidentResponseEnv
-from ..agent.model import get_agent
+# Add parent directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from env.environment import IncidentResponseEnv
+from agent.model import get_agent
 
 
 def run_episode(env: IncidentResponseEnv, agent) -> Dict[str, Any]:
@@ -31,7 +36,7 @@ def run_episode(env: IncidentResponseEnv, agent) -> Dict[str, Any]:
         if action.get("type") == "check_logs":
             # provide hidden root info for better hints (simulated)
             # In a real env this would be a method; here we just call the tool.
-            from ..tools.tools import check_logs
+            from tools.tools import check_logs
             hints = check_logs(action["target"], env._sim.root_service, env._sim.root_failure)
             # Replace the action with a no_op and attach hints in observation
             # The environment does not process check_logs directly, so we just log.

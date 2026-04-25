@@ -15,8 +15,13 @@ import random
 from typing import Dict, Any, List
 import requests
 
-from ..env.environment import IncidentResponseEnv
-from ..tools.tools import is_fix_action, check_logs
+try:
+    from huggingface_hub import get_token
+except ImportError:
+    get_token = lambda: None
+
+from env.environment import IncidentResponseEnv
+from tools.tools import is_fix_action, check_logs
 
 # ---------------------------------------------------------------------
 # Helper utilities
@@ -111,10 +116,8 @@ class LLMAgent:
     """
 
     def __init__(self, model_id: str | None = None, token: str | None = None, temperature: float = 0.0):
-        self.model_id = model_id or os.getenv("HF_MODEL_ID")
-        if not self.model_id:
-            raise ValueError("HF_MODEL_ID environment variable must be set for LLMAgent")
-        self.token = token or os.getenv("HF_API_TOKEN")
+        self.model_id = model_id or os.getenv("HF_MODEL_ID") or "meta-llama/Meta-Llama-3.1-8B-Instruct"
+        self.token = token or os.getenv("HF_API_TOKEN") or get_token()
         self.headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
         self.temperature = temperature
         self.session = requests.Session()
@@ -124,7 +127,7 @@ class LLMAgent:
         prompt = (
             "You are controlling an incident response agent. Given the following observation, "
             "output a JSON action. Use the exact schema from the PRD.\n\nObservation:\n"
-            f"{json.dumps(observation, indent=2)}\n\nAction:""
+            f"{json.dumps(observation, indent=2)}\n\nAction:"
         )
         payload = {
             "inputs": prompt,
@@ -138,21 +141,32 @@ class LLMAgent:
         generated = response.json()
         if isinstance(generated, list):
             generated = generated[0]
+        if isinstance(generated, dict) and "generated_text" in generated:
+            generated_str = generated["generated_text"]
+        elif isinstance(generated, dict) and "error" in generated:
+            raise ValueError(f"API Error: {generated['error']}")
+        else:
+            generated_str = str(generated)
+            
         # The model may return a JSON string possibly with surrounding text.
         try:
             # Find first '{' and last '}' to extract JSON.
-            start = generated.find('{')
-            end = generated.rfind('}')
-            json_str = generated[start : end + 1]
+            start = generated_str.find('{')
+            end = generated_str.rfind('}')
+            if start == -1 or end == -1:
+                raise ValueError("No JSON object found in output")
+            json_str = generated_str[start : end + 1]
             action = json.loads(json_str)
         except Exception as e:
-            raise ValueError(f"Failed to parse model output as JSON: {e}\nRaw output: {generated}")
+            print(f"[LLMAgent Debug] Parse failed: {e}\nRaw output: {generated_str}")
+            raise ValueError(f"Failed to parse model output as JSON: {e}\nRaw output: {generated_str}")
         return action
 
     def select_action(self, observation: Dict[str, Any]) -> Dict[str, Any]:
         try:
             return self._call_model(observation)
         except Exception as e:
+            print(f"[LLMAgent Debug] Action fallback to no_op due to error: {e}")
             # On any failure fall back to a safe no_op to keep the episode alive.
             return {"type": "no_op"}
 
