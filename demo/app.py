@@ -10,10 +10,12 @@ import sys
 import json
 from typing import List, Dict, Any
 
-# Add project root to the FRONT of sys.path so local modules always win
+# Add project root to the FRONT of sys.path so local modules always win.
+# Also add common Colab paths as a fallback.
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
+for _candidate in [_PROJECT_ROOT, "/content/CrashBerry", os.getcwd()]:
+    if os.path.isdir(_candidate) and _candidate not in sys.path:
+        sys.path.insert(0, _candidate)
 
 import gradio as gr
 
