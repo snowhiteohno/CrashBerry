@@ -183,13 +183,14 @@ class GeminiAgent:
     or use Colab Secrets (lock icon in the left sidebar).
     """
 
-    def __init__(self, model_id: str = "gemini-1.5-flash", temperature: float = 0.7):
+    def __init__(self, model_id: str = "gemini-2.0-flash", temperature: float = 0.7):
         try:
-            import google.generativeai as genai
+            from google import genai
+            from google.genai import types as genai_types
         except ImportError:
             raise ImportError(
-                "google-generativeai package not installed. "
-                "Run: pip install -q google-generativeai"
+                "google-genai package not installed. "
+                "Run: pip install -q google-genai"
             )
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
@@ -197,13 +198,11 @@ class GeminiAgent:
                 "GOOGLE_API_KEY environment variable not set. "
                 "Get a free key at https://aistudio.google.com/app/apikey"
             )
-        genai.configure(api_key=api_key)
-        self._model = genai.GenerativeModel(
-            model_id,
-            generation_config=genai.GenerationConfig(
-                temperature=temperature,
-                max_output_tokens=256,
-            ),
+        self._client = genai.Client(api_key=api_key)
+        self._model_id = model_id
+        self._config = genai_types.GenerateContentConfig(
+            temperature=temperature,
+            max_output_tokens=256,
         )
         self._system_prompt = (
             "You are an incident response agent controlling a microservice system. "
@@ -221,7 +220,11 @@ class GeminiAgent:
             f"{self._system_prompt}\n\nObservation:\n"
             f"{json.dumps(observation, indent=2)}\n\nAction JSON:"
         )
-        response = self._model.generate_content(prompt)
+        response = self._client.models.generate_content(
+            model=self._model_id,
+            contents=prompt,
+            config=self._config,
+        )
         text = response.text.strip()
         # Extract JSON from the response
         start = text.find('{')
@@ -236,7 +239,7 @@ class GeminiAgent:
             return self._call_model(observation)
         except Exception as e:
             print(f"[GeminiAgent Debug] Fallback to no_op: {e}")
-            return {"type": "no_op"}
+            raise  # re-raise so the demo UI catches and displays the real error
 
 # ---------------------------------------------------------------------
 # Export a simple factory for external callers
