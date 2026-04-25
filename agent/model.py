@@ -115,7 +115,7 @@ class LLMAgent:
     JSON action matching the PRD specification.
     """
 
-    def __init__(self, model_id: str | None = None, token: str | None = None, temperature: float = 0.0):
+    def __init__(self, model_id: str | None = None, token: str | None = None, temperature: float = 0.7):
         self.model_id = model_id or os.getenv("HF_MODEL_ID") or "meta-llama/Meta-Llama-3.1-8B-Instruct"
         self.token = token or os.getenv("HF_API_TOKEN") or get_token()
         self.headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
