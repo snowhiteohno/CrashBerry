@@ -37,10 +37,18 @@ def _run_demo_episode(agent_name: str) -> str:
         env.max_steps = _DEMO_MAX_STEPS  # enforce 15‑step cap
         try:
             agent = get_agent(agent_name)
+            # Test agent initialization if it's gemini or llm
+            if agent_name in ["gemini", "llm"]:
+                # Just a small check to see if credentials exist
+                if agent_name == "gemini" and not os.getenv("GOOGLE_API_KEY"):
+                    return f"❌ GOOGLE_API_KEY is not set in the environment.\n" \
+                           f"Run: os.environ['GOOGLE_API_KEY'] = 'your_key' in a Colab cell first."
         except Exception as e:
-            return f"❌ Error creating agent '{agent_name}': {e}\n\nCheck that:\n" \
-                   f"  • For 'gemini': GOOGLE_API_KEY is set and google-generativeai is installed.\n" \
-                   f"  • For 'llm':    HF_API_TOKEN is set and HF_MODEL_ID is accessible."
+            return f"❌ Error creating agent '{agent_name}': {e}\n\n" \
+                   f"Troubleshooting:\n" \
+                   f"  1. Run: !pip install -q google-genai\n" \
+                   f"  2. Run: os.environ['GOOGLE_API_KEY'] = 'your_key'\n" \
+                   f"  3. Restart the server."
         
         obs = env.reset()
         steps: List[Dict[str, Any]] = []
