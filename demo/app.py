@@ -38,16 +38,27 @@ def _run_demo_episode(agent_name: str) -> str:
         try:
             agent = get_agent(agent_name)
         except Exception as e:
-            return f"Error creating agent: {str(e)}"
+            return f"❌ Error creating agent '{agent_name}': {e}\n\nCheck that:\n" \
+                   f"  • For 'gemini': GOOGLE_API_KEY is set and google-generativeai is installed.\n" \
+                   f"  • For 'llm':    HF_API_TOKEN is set and HF_MODEL_ID is accessible."
         
         obs = env.reset()
         steps: List[Dict[str, Any]] = []
+        errors: List[str] = []
         done = False
         total_reward = 0.0
+        no_op_count = 0
+
         while not done:
-            action = agent.select_action(obs)
-            # The LLMAgent may need HF credentials; we assume they are set in env vars.
-            # For demo purposes, unknown actions fallback to no_op inside the agent.
+            try:
+                action = agent.select_action(obs)
+            except Exception as e:
+                errors.append(f"Step {len(steps)+1} agent error: {e}")
+                action = {"type": "no_op"}
+
+            if action.get("type") == "no_op":
+                no_op_count += 1
+
             new_obs, reward, done, info = env.step(action)
             steps.append({"observation": obs, "action": action, "reward": reward})
             total_reward += reward
@@ -59,13 +70,29 @@ def _run_demo_episode(agent_name: str) -> str:
             termination = "success"
         elif info.get("collapse_steps", 0) >= 3:
             termination = "collapse"
+
+        # Build diagnostic header
+        diag_lines = [f"🤖 Agent: {agent_name}  |  Steps: {len(steps)}  |  No-ops: {no_op_count}  |  End: {termination}"]
+        if no_op_count == len(steps):
+            diag_lines.append(
+                "⚠️  ALL steps were no-op — the agent is silently failing every call.\n"
+                "   Likely causes:\n"
+                "   • For 'gemini': GOOGLE_API_KEY not set before launching run_demo.py.\n"
+                "     Fix: stop the server, run  os.environ['GOOGLE_API_KEY']='your_key'  then restart.\n"
+                "   • For 'llm': HuggingFace API unreachable (DNS/network block).\n"
+                "     Fix: switch to 'gemini' agent."
+            )
+        if errors:
+            diag_lines.append("Errors caught during episode:")
+            diag_lines.extend(errors)
+        diag_lines.append("")  # blank line separator
             
         result = {
             "steps": steps,
             "total_reward": total_reward,
             "termination": termination,
         }
-        return _format_result(result)
+        return "\n".join(diag_lines) + _format_result(result)
     finally:
         _semaphore.release()
 
