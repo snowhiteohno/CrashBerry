@@ -1,0 +1,19 @@
+env_id: incident-response-v1
+score_range: [0, 1]         # normalized
+grader_count: 3
+max_steps: 20
+success_threshold: 0.90
+failure_threshold: 0.10
+services:
+  - api-gateway
+  - auth-service
+  - database
+  - cache
+  - worker
+failure_modes:
+  - memory_leak
+  - crashed
+  - overloaded
+  - bad_deploy
+noise_std: 0.15
+health_lag_steps: 1

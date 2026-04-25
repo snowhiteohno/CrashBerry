@@ -3,7 +3,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
+# env/ is intentionally NOT ignored — it is a source package, not a virtualenv
 build/
 develop-eggs/
 dist/
