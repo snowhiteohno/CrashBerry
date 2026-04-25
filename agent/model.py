@@ -171,6 +171,74 @@ class LLMAgent:
             return {"type": "no_op"}
 
 # ---------------------------------------------------------------------
+# Gemini Agent (Google AI Studio – free tier)
+# ---------------------------------------------------------------------
+class GeminiAgent:
+    """Uses the Google Gemini API to decide actions.
+    Requires a free API key from https://aistudio.google.com/app/apikey
+    Set it as the environment variable GOOGLE_API_KEY.
+
+    In Colab:
+        import os; os.environ['GOOGLE_API_KEY'] = 'your_key_here'
+    or use Colab Secrets (lock icon in the left sidebar).
+    """
+
+    def __init__(self, model_id: str = "gemini-1.5-flash", temperature: float = 0.7):
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            raise ImportError(
+                "google-generativeai package not installed. "
+                "Run: pip install -q google-generativeai"
+            )
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "GOOGLE_API_KEY environment variable not set. "
+                "Get a free key at https://aistudio.google.com/app/apikey"
+            )
+        genai.configure(api_key=api_key)
+        self._model = genai.GenerativeModel(
+            model_id,
+            generation_config=genai.GenerationConfig(
+                temperature=temperature,
+                max_output_tokens=256,
+            ),
+        )
+        self._system_prompt = (
+            "You are an incident response agent controlling a microservice system. "
+            "Given an observation JSON, output ONLY a valid JSON action with no extra text.\n"
+            "Valid action types: diagnose, restart_service, rollback_deploy, scale_up, "
+            "enable_circuit_breaker, check_logs, no_op.\n"
+            "For 'diagnose', include 'target' (service name) and 'failure_mode' "
+            "(one of: crashed, memory_leak, overloaded, bad_deploy).\n"
+            "For all other types (except no_op), include 'target' (service name).\n"
+            "Example: {\"type\": \"diagnose\", \"target\": \"auth\", \"failure_mode\": \"crashed\"}"
+        )
+
+    def _call_model(self, observation: Dict[str, Any]) -> Dict[str, Any]:
+        prompt = (
+            f"{self._system_prompt}\n\nObservation:\n"
+            f"{json.dumps(observation, indent=2)}\n\nAction JSON:"
+        )
+        response = self._model.generate_content(prompt)
+        text = response.text.strip()
+        # Extract JSON from the response
+        start = text.find('{')
+        end = text.rfind('}')
+        if start == -1 or end == -1:
+            raise ValueError(f"No JSON found in Gemini response: {text}")
+        action = json.loads(text[start:end + 1])
+        return action
+
+    def select_action(self, observation: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            return self._call_model(observation)
+        except Exception as e:
+            print(f"[GeminiAgent Debug] Fallback to no_op: {e}")
+            return {"type": "no_op"}
+
+# ---------------------------------------------------------------------
 # Export a simple factory for external callers
 # ---------------------------------------------------------------------
 def get_agent(name: str, **kwargs):
@@ -185,4 +253,6 @@ def get_agent(name: str, **kwargs):
         return HeuristicAgent(**kwargs)
     if name == "llm":
         return LLMAgent(**kwargs)
+    if name == "gemini":
+        return GeminiAgent(**kwargs)
     raise ValueError(f"Unknown agent name: {name}")

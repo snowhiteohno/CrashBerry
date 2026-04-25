@@ -82,7 +82,7 @@ def _format_result(result: Dict[str, Any]) -> str:
 
 with gr.Blocks() as demo:
     gr.Markdown("# Incident Response Demo\nChoose an agent and run a single episode (max 15 steps). Only one episode can run at a time.")
-    agent_dropdown = gr.Dropdown(choices=["random", "heuristic", "llm"], label="Agent", value="random")
+    agent_dropdown = gr.Dropdown(choices=["random", "heuristic", "llm", "gemini"], label="Agent", value="random")
     run_button = gr.Button("Run Episode")
     output_box = gr.Textbox(label="Result", lines=30)
     run_button.click(fn=_run_demo_episode, inputs=[agent_dropdown], outputs=[output_box], api_name="run_episode")
