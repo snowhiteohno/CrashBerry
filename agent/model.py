@@ -242,6 +242,55 @@ class GeminiAgent:
             raise  # re-raise so the demo UI catches and displays the real error
 
 # ---------------------------------------------------------------------
+# OpenAI Compatible Agent (OpenAI, Groq, etc.)
+# ---------------------------------------------------------------------
+class OpenAIAgent:
+    """Uses any OpenAI-compatible API (OpenAI, Groq, etc.)
+    Set OPENAI_API_KEY and optionally OPENAI_BASE_URL.
+    """
+
+    def __init__(self, model_id: str = "gpt-4o-mini", temperature: float = 0.7):
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError("openai package not installed. Run: pip install openai")
+        
+        api_key = os.getenv("OPENAI_API_KEY")
+        base_url = os.getenv("OPENAI_BASE_URL") # Can be used for Groq, etc.
+        
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable not set.")
+            
+        self._client = OpenAI(api_key=api_key, base_url=base_url)
+        self._model_id = model_id
+        self._temperature = temperature
+        self._system_prompt = (
+            "You are an incident response agent. Output ONLY a valid JSON action.\n"
+            "Valid action types: diagnose, restart_service, rollback_deploy, scale_up, "
+            "enable_circuit_breaker, check_logs, no_op.\n"
+            "Example: {\"type\": \"diagnose\", \"target\": \"auth\", \"failure_mode\": \"crashed\"}"
+        )
+
+    def _call_model(self, observation: Dict[str, Any]) -> Dict[str, Any]:
+        response = self._client.chat.completions.create(
+            model=self._model_id,
+            messages=[
+                {"role": "system", "content": self._system_prompt},
+                {"role": "user", "content": f"Observation: {json.dumps(observation)}"}
+            ],
+            temperature=self._temperature,
+            response_format={ "type": "json_object" }
+        )
+        return json.loads(response.choices[0].message.content)
+
+    def select_action(self, observation: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            return self._call_model(observation)
+        except Exception as e:
+            print(f"[OpenAIAgent Debug] Error: {e}")
+            raise
+
+# ---------------------------------------------------------------------
 # Export a simple factory for external callers
 # ---------------------------------------------------------------------
 def get_agent(name: str, **kwargs):
@@ -258,4 +307,6 @@ def get_agent(name: str, **kwargs):
         return LLMAgent(**kwargs)
     if name == "gemini":
         return GeminiAgent(**kwargs)
+    if name == "openai":
+        return OpenAIAgent(**kwargs)
     raise ValueError(f"Unknown agent name: {name}")
