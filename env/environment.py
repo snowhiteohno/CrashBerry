@@ -7,7 +7,15 @@ from typing import Any, Dict, Tuple
 
 from .simulator import Simulator
 
-from openenv.core import Environment
+try:
+    from openenv.core import Environment
+except ImportError:
+    try:
+        from openenv import Environment
+    except ImportError:
+        # Fallback to a dummy class if openenv is totally missing
+        # (prevents hard crash during import)
+        class Environment: pass
 
 class IncidentResponseEnv(Environment):
     """Gym‑style environment exposing the PRD specifications.
