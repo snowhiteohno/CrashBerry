@@ -1,6 +1,5 @@
 try:
     import unsloth
-    from unsloth import apply_chat_template, apply_unsloth
     HAS_UNSLOTH = True
 except ImportError:
     HAS_UNSLOTH = False
@@ -10,7 +9,7 @@ import argparse
 from pathlib import Path
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 # TRL imports
 import trl
@@ -43,11 +42,17 @@ def load_model(model_name: str, device: str):
     if not HAS_UNSLOTH:
         print("⚠️ Unsloth not found. Falling back to standard Transformers (slower).")
 
-    # Load base model. Standard HF loading.
+    # Load base model with 4-bit quantization config
+    quantization_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_compute_dtype=torch.float16,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True,
+    )
+
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch.float16,
-        load_in_4bit=True,
+        quantization_config=quantization_config,
         device_map=device,
     )
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -55,7 +60,17 @@ def load_model(model_name: str, device: str):
     
     # Apply Unsloth optimizations only if available.
     if HAS_UNSLOTH:
-        apply_unsloth(model)
+        from unsloth import FastLanguageModel
+        model = FastLanguageModel.get_peft_model(
+            model,
+            r=16,
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+            lora_alpha=16,
+            lora_dropout=0,
+            bias="none",
+            use_gradient_checkpointing="unsloth",
+            random_state=3407,
+        )
     
     return model, tokenizer
 
