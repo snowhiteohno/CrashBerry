@@ -1,8 +1,8 @@
 import os
 import argparse
-from pathlib import Path
+import json
 import torch
-import inspect
+import re
 
 try:
     from unsloth import FastLanguageModel
@@ -21,7 +21,6 @@ except ImportError:
 from env.environment import IncidentResponseEnv
 
 def load_model(model_name: str, device: str):
-    """Load model using Unsloth if available, otherwise standard HF."""
     if HAS_UNSLOTH:
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name = model_name,
@@ -43,13 +42,20 @@ def load_model(model_name: str, device: str):
     else:
         quantization_config = BitsAndBytesConfig(load_in_4bit=True)
         model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            quantization_config=quantization_config,
-            device_map=device,
-            trust_remote_code=True
+            model_name, quantization_config=quantization_config, device_map=device, trust_remote_code=True
         )
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         return model, tokenizer
+
+def parse_action(text):
+    """Attempt to extract a JSON action from the model output."""
+    try:
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+    except:
+        pass
+    return {"type": "no_op"}
 
 def main(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -57,53 +63,51 @@ def main(args):
     model, tokenizer = load_model(args.model_name, device)
     ref_model = create_reference_model(model)
 
-    # Basic PPO Config
     ppo_config = PPOConfig(
         batch_size=args.batch_size,
-        mini_batch_size=args.mini_batch_size,
+        mini_batch_size=args.batch_size,
         learning_rate=args.lr,
         log_with=None
     )
 
-    trainer = PPOTrainer(
-        model=model,
-        ref_model=ref_model,
-        tokenizer=tokenizer,
-        config=ppo_config,
-    )
+    trainer = PPOTrainer(model=model, ref_model=ref_model, tokenizer=tokenizer, config=ppo_config)
 
-    reward_history = []
+    print("🚀 Starting Training Loop...")
     for epoch in range(args.epochs):
         obs = env.reset()
         done = False
         step_count = 0
+        total_reward = 0
+        
         while not done and step_count < env.max_steps:
-            prompt = f"Observation: {obs}\nAction (JSON):"
+            prompt = f"System: You are an incident response agent. Current State: {obs}\nAction (JSON format):"
             inputs = tokenizer(prompt, return_tensors="pt").to(device)
-            response = model.generate(**inputs, max_new_tokens=32)
             
-            # Simplified reward logic for the training loop
-            new_obs, reward, done, info = env.step({"type": "no_op"})
+            # Generate action
+            output = model.generate(**inputs, max_new_tokens=64, do_sample=True, temperature=0.7)
+            response_text = tokenizer.decode(output[0], skip_special_tokens=True)
             
-            # Step trainer
-            trainer.step([inputs['input_ids'][0]], [response[0]], [torch.tensor(reward)])
+            # Parse and Step
+            action = parse_action(response_text)
+            new_obs, reward, done, info = env.step(action)
             
-            reward_history.append(reward)
+            # RL Step
+            trainer.step([inputs['input_ids'][0]], [output[0]], [torch.tensor(float(reward))])
+            
+            total_reward += reward
             obs = new_obs
             step_count += 1
             
-        print(f"Epoch {epoch+1}/{args.epochs} - Last Reward: {reward_history[-1] if reward_history else 0}")
+        print(f"✅ Epoch {epoch+1} Complete | Total Reward: {total_reward:.2f} | Steps: {step_count}")
 
-    print("Training loop initialized successfully.")
+    print("🎉 Training process finished successfully!")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-name", type=str, default="unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit")
-    parser.add_argument("--output-dir", type=str, default="./trained_models")
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=1)
-    parser.add_argument("--mini-batch_size", type=int, default=1)
-    parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
     main(args)
