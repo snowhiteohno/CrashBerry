@@ -31,7 +31,8 @@ class IncidentResponseEnv(Environment):
         """Return the current hidden state of the simulator."""
         return self._sim._generate_observation()
 
-    def __init__(self, seed: int | None = None):
+    def __init__(self, seed: int | None = None, **kwargs):
+        super().__init__(**kwargs)
         self.seed(seed)
         self._sim = Simulator(seed=self._seed)
         self.max_steps = 20
