@@ -45,10 +45,12 @@ def load_model(model_name: str, device: str):
     """
     try:
         from unsloth import apply_chat_template, apply_unsloth
-    except ImportError as e:
-        raise ImportError("Unsloth is required for efficient training: pip install unsloth") from e
+        USE_UNSLOTH = True
+    except ImportError:
+        print("⚠️ Unsloth not found. Falling back to standard Transformers (slower).")
+        USE_UNSLOTH = False
 
-    # Load base model in 4‑bit mode.
+    # Load base model. Standard HF loading.
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.float16,
@@ -57,8 +59,11 @@ def load_model(model_name: str, device: str):
     )
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer.pad_token = tokenizer.eos_token
-    # Apply Unsloth optimizations (e.g., flash attention).
-    apply_unsloth(model)
+    
+    # Apply Unsloth optimizations only if available.
+    if USE_UNSLOTH:
+        apply_unsloth(model)
+    
     return model, tokenizer
 
 
