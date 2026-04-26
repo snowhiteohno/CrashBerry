@@ -1,8 +1,10 @@
-"""Training script for the Incident Response environment using TRL (Proximal Policy Optimization)
-and Unsloth for efficient fine‑tuning of Qwen‑1.5B.
-The script follows the PRD specifications: it trains an LLM agent on the
-environment, logs the reward curve, and saves checkpoints.
-"""
+try:
+    import unsloth
+    from unsloth import apply_chat_template, apply_unsloth
+    HAS_UNSLOTH = True
+except ImportError:
+    HAS_UNSLOTH = False
+
 import os
 import argparse
 from pathlib import Path
@@ -10,7 +12,7 @@ from pathlib import Path
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# TRL imports – assume the library is installed in the environment.
+# TRL imports
 import trl
 if hasattr(trl, "PPOTrainer"):
     from trl import PPOTrainer, PPOConfig
@@ -21,7 +23,6 @@ else:
         from trl.trainer.ppo_trainer import PPOTrainer
         from trl.trainer.ppo_config import PPOConfig
     except ImportError:
-        # Final fallback for some edge-case installations
         PPOTrainer = None
         PPOConfig = None
 
@@ -38,17 +39,9 @@ from env.environment import IncidentResponseEnv
 
 
 def load_model(model_name: str, device: str):
-    """Load Qwen‑1.5B (or compatible) model with Unsloth optimizations.
-    Unsloth patches the Transformers model class to use 4‑bit quantization and
-    efficient PEFT adapters. We assume the user has installed ``unsloth`` which
-    provides ``apply_unsloth``.
-    """
-    try:
-        from unsloth import apply_chat_template, apply_unsloth
-        USE_UNSLOTH = True
-    except ImportError:
+    """Load model with optional Unsloth optimizations."""
+    if not HAS_UNSLOTH:
         print("⚠️ Unsloth not found. Falling back to standard Transformers (slower).")
-        USE_UNSLOTH = False
 
     # Load base model. Standard HF loading.
     model = AutoModelForCausalLM.from_pretrained(
@@ -61,7 +54,7 @@ def load_model(model_name: str, device: str):
     tokenizer.pad_token = tokenizer.eos_token
     
     # Apply Unsloth optimizations only if available.
-    if USE_UNSLOTH:
+    if HAS_UNSLOTH:
         apply_unsloth(model)
     
     return model, tokenizer
