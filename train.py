@@ -38,41 +38,42 @@ from env.environment import IncidentResponseEnv
 
 
 def load_model(model_name: str, device: str):
-    """Load model with optional Unsloth optimizations."""
-    if not HAS_UNSLOTH:
-        print("⚠️ Unsloth not found. Falling back to standard Transformers (slower).")
-
-    # Load base model with 4-bit quantization config
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype=torch.float16,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-    )
-
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        quantization_config=quantization_config,
-        device_map=device,
-    )
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    tokenizer.pad_token = tokenizer.eos_token
-    
-    # Apply Unsloth optimizations only if available.
+    """Load model using Unsloth's FastLanguageModel for maximum stability."""
     if HAS_UNSLOTH:
         from unsloth import FastLanguageModel
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name = model_name,
+            max_seq_length = 2048,
+            dtype = None,
+            load_in_4bit = True,
+        )
         model = FastLanguageModel.get_peft_model(
             model,
-            r=16,
-            target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
-            lora_alpha=16,
-            lora_dropout=0,
-            bias="none",
-            use_gradient_checkpointing="unsloth",
-            random_state=3407,
+            r = 16,
+            target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
+                              "gate_proj", "up_proj", "down_proj",],
+            lora_alpha = 16,
+            lora_dropout = 0,
+            bias = "none",
+            use_gradient_checkpointing = "unsloth",
+            random_state = 3407,
+            use_rslora = False,
+            loftq_config = None,
         )
-    
-    return model, tokenizer
+        return model, tokenizer
+    else:
+        # Standard fallback if Unsloth is missing
+        print("⚠️ Unsloth not found. Falling back to standard Transformers.")
+        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+        quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            quantization_config=quantization_config,
+            device_map=device,
+            trust_remote_code=True
+        )
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        return model, tokenizer
 
 
 def main(args):
