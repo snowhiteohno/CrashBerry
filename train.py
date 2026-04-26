@@ -11,7 +11,11 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # TRL imports – assume the library is installed in the environment.
-from trl import PPOTrainer, PPOConfig, create_reference_model, LogRewardCallback
+try:
+    from trl import PPOTrainer, PPOConfig, create_reference_model
+except ImportError:
+    from trl.trainer import PPOTrainer, PPOConfig
+    from trl.models import create_reference_model
 
 # Import the environment.
 from env.environment import IncidentResponseEnv
