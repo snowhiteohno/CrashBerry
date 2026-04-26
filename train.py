@@ -26,6 +26,20 @@ else:
         PPOConfig = None
 
 try:
+    from trl import PPOConfig
+    # Monkey-patch PPOConfig to ignore unknown arguments (nuke fix for library conflicts)
+    original_init = PPOConfig.__init__
+    def patched_init(self, *args, **kwargs):
+        import inspect
+        sig = inspect.signature(original_init).parameters
+        # Filter kwargs to only those that exist in the original __init__
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k in sig or k == 'self'}
+        return original_init(self, *args, **filtered_kwargs)
+    PPOConfig.__init__ = patched_init
+except ImportError:
+    pass
+
+try:
     from trl import create_reference_model
 except ImportError:
     try:
