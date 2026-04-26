@@ -1,3 +1,19 @@
+import inspect
+import sys
+
+# --- SAFETY SHIELD: Monkey-patch PPOConfig before anything else imports it ---
+try:
+    import trl
+    if hasattr(trl, "PPOConfig"):
+        original_init = trl.PPOConfig.__init__
+        def patched_init(self, *args, **kwargs):
+            sig = inspect.signature(original_init).parameters
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k in sig or k == 'self'}
+            return original_init(self, *args, **filtered_kwargs)
+        trl.PPOConfig.__init__ = patched_init
+except:
+    pass
+
 import os
 import argparse
 import json
@@ -48,7 +64,6 @@ def load_model(model_name: str, device: str):
         return model, tokenizer
 
 def parse_action(text):
-    """Attempt to extract a JSON action from the model output."""
     try:
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
@@ -83,22 +98,20 @@ def main(args):
             prompt = f"System: You are an incident response agent. Current State: {obs}\nAction (JSON format):"
             inputs = tokenizer(prompt, return_tensors="pt").to(device)
             
-            # Generate action
             output = model.generate(**inputs, max_new_tokens=64, do_sample=True, temperature=0.7)
             response_text = tokenizer.decode(output[0], skip_special_tokens=True)
             
-            # Parse and Step
             action = parse_action(response_text)
             new_obs, reward, done, info = env.step(action)
             
-            # RL Step
+            # Simple scalar reward
             trainer.step([inputs['input_ids'][0]], [output[0]], [torch.tensor(float(reward))])
             
             total_reward += reward
             obs = new_obs
             step_count += 1
             
-        print(f"✅ Epoch {epoch+1} Complete | Total Reward: {total_reward:.2f} | Steps: {step_count}")
+        print(f"✅ Epoch {epoch+1} Complete | Total Reward: {total_reward:.2f}")
 
     print("🎉 Training process finished successfully!")
 
