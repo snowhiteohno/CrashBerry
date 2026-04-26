@@ -85,16 +85,12 @@ def main(args):
     # Create reference model for PPO (copy of the same weights, no gradient).
     ref_model = create_reference_model(model)
 
-    # PPO configuration – values are chosen to be reasonable for a 1.5B model.
+    # PPO configuration – simplified for maximum compatibility
     ppo_config = PPOConfig(
         batch_size=args.batch_size,
         mini_batch_size=args.mini_batch_size,
         learning_rate=args.lr,
         max_grad_norm=1.0,
-        kl_coef=0.2,
-        clip_range=0.2,
-        clip_range_value=0.2,
-        target_kl=None,
     )
 
     trainer = PPOTrainer(
