@@ -85,13 +85,19 @@ def main(args):
     # Create reference model for PPO (copy of the same weights, no gradient).
     ref_model = create_reference_model(model)
 
-    # PPO configuration – simplified for maximum compatibility
-    ppo_config = PPOConfig(
-        batch_size=args.batch_size,
-        mini_batch_size=args.mini_batch_size,
-        learning_rate=args.lr,
-        max_grad_norm=1.0,
-    )
+    # PPO configuration – dynamically inspected for universal compatibility
+    import inspect
+    ppo_params = {
+        "batch_size": args.batch_size,
+        "mini_batch_size": args.mini_batch_size,
+        "learning_rate": args.lr,
+        "max_grad_norm": 1.0,
+    }
+    # Only pass parameters that the current PPOConfig actually supports
+    supported_params = inspect.signature(PPOConfig.__init__).parameters
+    filtered_params = {k: v for k, v in ppo_params.items() if k in supported_params}
+    ppo_config = PPOConfig(**filtered_params)
+    print(f"Initialized PPOConfig with: {list(filtered_params.keys())}")
 
     trainer = PPOTrainer(
         model=model,
