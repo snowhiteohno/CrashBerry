@@ -7,7 +7,9 @@ from typing import Any, Dict, Tuple
 
 from .simulator import Simulator
 
-class IncidentResponseEnv:
+from openenv.core import Environment
+
+class IncidentResponseEnv(Environment):
     """Gym‑style environment exposing the PRD specifications.
     
     The observation dict matches the format described in the PRD and is
@@ -15,6 +17,11 @@ class IncidentResponseEnv:
     the action to the underlying ``Simulator`` and returns the tuple
     ``(observation, reward, done, info)``.
     """
+
+    @property
+    def state(self) -> Dict[str, Any]:
+        """Return the current hidden state of the simulator."""
+        return self._sim._generate_observation()
 
     def __init__(self, seed: int | None = None):
         self.seed(seed)

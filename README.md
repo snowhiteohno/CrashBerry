@@ -4,10 +4,17 @@ An OpenEnv-compatible environment for evaluating and training Large Language Mod
 
 ## Table of Contents
 - [Overview](#overview)
+- [Deliverables](#deliverables)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
 - [Evaluation Baselines](#evaluation-baselines)
 - [Training](#training)
+- [Evidence](#evidence)
+
+## Deliverables
+- **HF Space (Demo):** [u7k4rs6/Metafinal](https://huggingface.co/spaces/u7k4rs6/Metafinal)
+- **Training Notebook:** [Google Colab](https://colab.research.google.com/drive/16Rq5AQ3yvXiKh_3Chs1fx41YK7isWNJp?usp=sharing)
+- **Writeup:** [Blog / Slides Link Here] (Update this!)
 
 ## Overview
 Current LLMs struggle with environments that demand persistent memory, temporal health tracking, and delayed action feedback. This simulator creates a production environment composing 5 microservices:
@@ -44,3 +51,11 @@ python eval/evaluate.py
 To begin training on a cloud environment (e.g. Free Tier Colab T4), utilize `train.py` extending GRPO/PPO mappings:
 - `Qwen 1.5-1.8b` (4-bit LoRA config pre-allocated inside `train.py`)
 - Extends standard `FastLanguageModel` loading.
+
+## Evidence
+
+### Training Progress (Reward Curve)
+![Reward Curve](assets/reward_curve.png)
+
+### Optimization Stability (Loss Curve)
+![Loss Curve](assets/loss_curve.png)

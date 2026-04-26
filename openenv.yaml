@@ -1,0 +1,6 @@
+name: incident-response-v1
+description: "Stateful LLM incident response environment over a 5-service microservice mesh."
+version: "1.0.0"
+env_class: env.environment.IncidentResponseEnv
+score_range: [0, 1]
+max_steps: 20
