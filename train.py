@@ -11,11 +11,27 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # TRL imports – assume the library is installed in the environment.
-try:
-    from trl import PPOTrainer, PPOConfig, create_reference_model
-except ImportError:
+import trl
+if hasattr(trl, "PPOTrainer"):
+    from trl import PPOTrainer, PPOConfig
+elif hasattr(trl, "trainer") and hasattr(trl.trainer, "PPOTrainer"):
     from trl.trainer import PPOTrainer, PPOConfig
-    from trl.models import create_reference_model
+else:
+    try:
+        from trl.trainer.ppo_trainer import PPOTrainer
+        from trl.trainer.ppo_config import PPOConfig
+    except ImportError:
+        # Final fallback for some edge-case installations
+        PPOTrainer = None
+        PPOConfig = None
+
+try:
+    from trl import create_reference_model
+except ImportError:
+    try:
+        from trl.models import create_reference_model
+    except ImportError:
+        create_reference_model = None
 
 # Import the environment.
 from env.environment import IncidentResponseEnv
